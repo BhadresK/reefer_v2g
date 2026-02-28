@@ -109,12 +109,16 @@ class PriceLoader:
         self.df_real = None
         self.model   = None
 
-        if mode in ("auto", "real") and Path(smard_csv).exists():
+        # Always load real data if available — needed as lag history even in forecast mode
+        if Path(smard_csv).exists():
             print(f"  Loading real SMARD prices from {smard_csv}...")
-            self.df_real = pd.read_csv(smard_csv, index_col=0, parse_dates=True)
+            self.df_real = pd.read_csv(smard_csv, index_col=0)
+            self.df_real.index = pd.to_datetime(self.df_real.index, utc=True).tz_convert("Europe/Berlin")
+            self.df_real.index.name = "datetime_cet"
             print(f"    {len(self.df_real):,} rows, "
                   f"{self.df_real.index.min().date()} → {self.df_real.index.max().date()}")
-            self.mode = "real"
+            if mode in ("auto", "real"):
+                self.mode = "real"
 
         if (mode in ("auto", "forecast") and
                 Path(model_path).exists() and HAS_FORECASTER):
@@ -123,7 +127,7 @@ class PriceLoader:
             if self.df_real is None:
                 self.mode = "forecast_only"
             else:
-                self.mode = "real+forecast"
+                self.mode = "forecast"   # use forecast for future dates, real for past
             print(f"    Model loaded. Mode: {self.mode}")
 
         if self.df_real is None and self.model is None:
@@ -135,16 +139,25 @@ class PriceLoader:
                        noise_std: float = 0.0) -> tuple[np.ndarray, np.ndarray, str]:
         """
         Returns (buy_EUR_kWh, v2g_EUR_kWh) arrays of shape (96,) for the given date.
+
+        Routing logic:
+          - Date exists in real SMARD data → use real prices (most accurate)
+          - Date is in future / missing + model available → ML forecast using
+            real historical lags as context (realistic future simulation)
+          - No data, no model → synthetic seasonal fallback
         """
-        if self.mode in ("real", "real+forecast"):
+        # Try real data first regardless of mode
+        if self.df_real is not None:
             result = self._get_real_day(date, rng, noise_std)
-            if result is not None:
+            if result is not None and self.mode != "forecast":
                 return result
-            # Fall back to forecast if real data is missing for this date
+            # Date not in real data (future) or forecast mode → use ML model
             if self.model is not None:
                 return self._get_forecast_day(date, rng, noise_std)
+            if result is not None:
+                return result   # real data exists, no model
 
-        if self.mode in ("forecast_only", "real+forecast") and self.model is not None:
+        if self.model is not None:
             return self._get_forecast_day(date, rng, noise_std)
 
         return self._get_synthetic_day(date)
@@ -182,25 +195,49 @@ class PriceLoader:
 
     def _get_forecast_day(self, date: pd.Timestamp,
                           rng, noise_std) -> tuple:
-        """Use ML model to forecast 96-slot day-ahead prices."""
+        """
+        Use ML model to forecast 96-slot day-ahead prices.
+
+        For future dates: seeds the lag buffer with the last 700 slots of real
+        SMARD data, then chains predictions forward day-by-day so the model
+        always has realistic lag features — not zeros.
+        """
+        # Build history buffer: real data up to the simulation start date
+        # plus any previously predicted days stored in self._forecast_cache
         if self.df_real is not None:
-            history = self.df_real[self.df_real.index < date]
-            if len(history) < 700:
+            real_history = self.df_real[self.df_real.index < date]
+            if len(real_history) < 700:
                 return self._get_synthetic_day(date)
         else:
-            # No real history — use synthetic warmup
             return self._get_synthetic_day(date)
 
+        # Merge real history with cached forecasts for continuity
+        if not hasattr(self, "_forecast_cache"):
+            self._forecast_cache = real_history.copy()
+
+        # Use the most recent 700 rows (real + previously forecast)
+        combined = pd.concat([real_history.tail(700),
+                              self._forecast_cache[self._forecast_cache.index >= real_history.index.max()]
+                              ]).drop_duplicates().sort_index().tail(700)
+
         spot_mwh = make_24h_forecast(
-            self.model, history, date,
+            self.model, combined, date,
             noise_std=noise_std, rng=rng
         )
+
+        # Cache this day's predictions so tomorrow's forecast uses them as lags
+        new_idx = pd.date_range(date, periods=96, freq="15min", tz=date.tz)
+        new_rows = pd.DataFrame({"price_EUR_MWh": spot_mwh}, index=new_idx)
+        # Add minimal feature columns needed (will be recomputed next call)
+        self._forecast_cache = pd.concat([self._forecast_cache, new_rows]).tail(800)
+
         spot = spot_mwh / 1000.0
         buy  = (spot + FIXED_NET) * (1 + VAT)
 
         h   = np.arange(96) * 0.25
         fcr = np.where((h >= 16) & (h < 20), FCR_PEAK_EUR_KWH, 0.0)
-        v2g = buy + fcr
+        afrr= np.where((h >= 7)  & (h < 9),  FCR_MORNING_EUR_KWH, 0.0)
+        v2g = buy + fcr + afrr
 
         return buy, v2g, f"ML FORECAST {date.strftime('%Y-%m-%d')}"
 
