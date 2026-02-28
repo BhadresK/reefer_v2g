@@ -107,13 +107,10 @@ def load_data(path: str = "data/smard_prices_processed.csv") -> pd.DataFrame:
             "Run fetch_smard_data.py first."
         )
     df = pd.read_csv(path, index_col=0)
-    # Force timezone-aware DatetimeIndex regardless of pandas version
-    df.index = pd.to_datetime(df.index, utc=False)
-    if df.index.tz is None:
-        df.index = df.index.tz_localize("Europe/Berlin", ambiguous="infer",
-                                         nonexistent="shift_forward")
-    else:
-        df.index = df.index.tz_convert("Europe/Berlin")
+    # Robustly convert index to timezone-aware DatetimeIndex (pandas 2.x safe)
+    raw_idx = pd.to_datetime(df.index, utc=True)   # parse as UTC first — always works
+    df.index = raw_idx.tz_convert("Europe/Berlin")  # then localise to CET/CEST
+    df.index.name = "datetime_cet"
     print(f"  Loaded {len(df):,} rows from {path}")
     print(f"  Date range: {df.index.min()} → {df.index.max()}")
 
