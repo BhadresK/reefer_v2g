@@ -180,16 +180,28 @@ class PriceLoader:
             subset = subset.reindex(idx_96, method="nearest")
 
         spot = subset["price_EUR_MWh"].values / 1000.0   # EUR/MWh → EUR/kWh
-        buy  = (spot + FIXED_NET) * (1 + VAT)
 
-        h     = np.arange(96) * 0.25
-        fcr   = np.where((h >= 16) & (h < 20), FCR_PEAK_EUR_KWH, 0.0)
-        afrr  = np.where((h >= 7)  & (h < 9),  FCR_MORNING_EUR_KWH, 0.0)
-        v2g   = buy + fcr + afrr
+        # All-in buy price (what depot actually pays to grid)
+        buy_allin = (spot + FIXED_NET) * (1 + VAT)
+
+        # V2G optimizer signal uses SPOT-based prices so spread is preserved:
+        # Fixed costs (network fee, taxes) are paid regardless of V2G activity
+        # and thus cancel out of the arbitrage decision (Biedenbach & Strunz 2024).
+        # The optimizer sees spot prices + FCR premium to correctly decide when
+        # to discharge.  Cost accounting still uses all-in prices.
+        h    = np.arange(96) * 0.25
+        fcr  = np.where((h >= 16) & (h < 20), FCR_PEAK_EUR_KWH, 0.0)
+        afrr = np.where((h >= 7)  & (h < 9),  FCR_MORNING_EUR_KWH, 0.0)
+
+        # buy  = spot price (optimizer signal for charging decision)
+        # v2g  = spot + FCR/aFRR (optimizer signal for discharge/V2G decision)
+        # cost accounting: buy_allin used in KPI aggregation via _make_result
+        buy = np.maximum(0.001, spot)
+        v2g = np.maximum(buy, spot + fcr + afrr)
 
         if noise_std > 0:
-            buy = np.maximum(0.01, buy + rng.normal(0, noise_std, 96))
-            v2g = np.maximum(buy,  v2g + rng.normal(0, noise_std, 96))
+            buy = np.maximum(0.001, buy + rng.normal(0, noise_std, 96))
+            v2g = np.maximum(buy,   v2g + rng.normal(0, noise_std, 96))
 
         return buy, v2g, f"REAL SMARD {date_str}"
 
@@ -232,12 +244,13 @@ class PriceLoader:
         self._forecast_cache = pd.concat([self._forecast_cache, new_rows]).tail(800)
 
         spot = spot_mwh / 1000.0
-        buy  = (spot + FIXED_NET) * (1 + VAT)
 
-        h   = np.arange(96) * 0.25
-        fcr = np.where((h >= 16) & (h < 20), FCR_PEAK_EUR_KWH, 0.0)
-        afrr= np.where((h >= 7)  & (h < 9),  FCR_MORNING_EUR_KWH, 0.0)
-        v2g = buy + fcr + afrr
+        # Same spot-based optimizer signal as real data path
+        h    = np.arange(96) * 0.25
+        fcr  = np.where((h >= 16) & (h < 20), FCR_PEAK_EUR_KWH, 0.0)
+        afrr = np.where((h >= 7)  & (h < 9),  FCR_MORNING_EUR_KWH, 0.0)
+        buy  = np.maximum(0.001, spot)
+        v2g  = np.maximum(buy, spot + fcr + afrr)
 
         return buy, v2g, f"ML FORECAST {date.strftime('%Y-%m-%d')}"
 
@@ -257,9 +270,10 @@ class PriceLoader:
                  (h>=12)&(h<14),(h>=14)&(h<16),(h>=16)&(h<19),(h>=19)&(h<21)],
                 [0.052,0.071,0.148,0.131,0.108,0.092,0.154,0.118],
                 default=0.052)
-        buy = (spot + FIXED_NET) * (1 + VAT)
+        # Spot-only optimizer signal (fixed costs cancel in arbitrage)
+        buy = np.maximum(0.001, spot)
         fcr = np.where((h>=16)&(h<20), FCR_PEAK_EUR_KWH, 0.0)
-        v2g = buy + fcr
+        v2g = np.maximum(buy, spot + fcr)
         season = "summer" if is_summer else "winter"
         return buy, v2g, f"SYNTHETIC {season}"
 
