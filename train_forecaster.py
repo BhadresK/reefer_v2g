@@ -106,7 +106,14 @@ def load_data(path: str = "data/smard_prices_processed.csv") -> pd.DataFrame:
             f"Processed data not found at {path}. "
             "Run fetch_smard_data.py first."
         )
-    df = pd.read_csv(path, index_col=0, parse_dates=True)
+    df = pd.read_csv(path, index_col=0)
+    # Force timezone-aware DatetimeIndex regardless of pandas version
+    df.index = pd.to_datetime(df.index, utc=False)
+    if df.index.tz is None:
+        df.index = df.index.tz_localize("Europe/Berlin", ambiguous="infer",
+                                         nonexistent="shift_forward")
+    else:
+        df.index = df.index.tz_convert("Europe/Berlin")
     print(f"  Loaded {len(df):,} rows from {path}")
     print(f"  Date range: {df.index.min()} → {df.index.max()}")
 
@@ -141,10 +148,10 @@ def split_data(df: pd.DataFrame) -> tuple:
         test  = df.iloc[i_test:]
         split_mode = "percentage (short dataset)"
     else:
-        # Use pd.Timestamp with UTC-aware comparison to handle timezone-aware index
-        tz = df.index.tz
-        train_end = pd.Timestamp("2023-12-31 23:59", tz=tz)
-        val_end   = pd.Timestamp("2024-06-30 23:59", tz=tz)
+        # Timezone-safe split — works with any tz-aware DatetimeIndex
+        tz = df.index.tz  # e.g. Europe/Berlin
+        train_end = pd.Timestamp("2023-12-31 23:59").tz_localize(tz)
+        val_end   = pd.Timestamp("2024-06-30 23:59").tz_localize(tz)
         train = df[df.index <= train_end]
         val   = df[(df.index > train_end) & (df.index <= val_end)]
         test  = df[df.index > val_end]
