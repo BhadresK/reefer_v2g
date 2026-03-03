@@ -22,12 +22,12 @@ battery = pd.DataFrame({
         "DegradationCost_EUR_kWh",
     ],
     "Value": [
-        82.0,    # Total pack capacity
-        65.6,    # Usable: 20-95% of 82 kWh
+        70.0,    # Total pack capacity
+        60.0,    # Usable: 20-95% of 70 kWh
         20.0,    # SoC floor — cold-chain reserve (Agora 2025: never below 20%)
         95.0,    # SoC ceiling — cycle life protection
         22.0,    # AC charge power (ISO 15118-2 Mode 3)
-        11.0,    # V2G discharge (bidirectional OBC limit)
+        22.0,    # V2G discharge (bidirectional OBC limit)
         0.92,    # One-way charge efficiency (IEC 62196)
         0.92,    # One-way discharge efficiency
         0.07,    # Battery wear cost EUR/kWh cycled (Agora 2025, Table 3)

@@ -48,12 +48,12 @@ from pathlib import Path
 class V2GParams:
     """Battery + grid parameters for one reefer trailer.
     Defaults match the S.KOe COOL 82 kWh pack (Schmitz Cargobull, 2025)."""
-    battery_capacity_kWh:  float = 82.0
-    usable_capacity_kWh:   float = 65.6     # usable window (SoC 20-95 %)
+    battery_capacity_kWh:  float = 70.0
+    usable_capacity_kWh:   float = 60.0     # usable window (SoC 20-95 %)
     soc_min_pct:           float = 20.0     # cold-chain floor
     soc_max_pct:           float = 95.0     # cycle ceiling
     charge_power_kW:       float = 22.0     # max AC charge (ISO 15118)
-    discharge_power_kW:    float = 11.0     # max V2G discharge
+    discharge_power_kW:    float = 22.0     # max V2G discharge
     eta_charge:            float = 0.92
     eta_discharge:         float = 0.92
     deg_cost_eur_kwh:      float = 0.07     # battery wear €/kWh cycled
