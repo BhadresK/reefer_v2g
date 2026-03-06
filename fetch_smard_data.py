@@ -6,8 +6,8 @@ Downloads real EPEX Spot day-ahead prices (15-min resolution) from SMARD.de.
 Free, no login, no API key required.  CC BY 4.0 licence.
 
 Usage:
-    python fetch_smard_data.py                   # fetches 2022-2024 (default)
-    python fetch_smard_data.py --years 2021 2024  # custom range
+    python fetch_smard_data.py                   # fetches 2022-2025 (default)
+    python fetch_smard_data.py --years 2022 2025  # custom range
     python fetch_smard_data.py --test             # fetch just 1 month to test
 
 Output:
@@ -69,8 +69,8 @@ FILTER_ID  = 4169          # Day-ahead price, DE-LU, quarterhour
 REGION     = "DE-LU"
 RESOLUTION = "quarterhour"
 
-# BNetzA regulated fixed costs 2024 (EUR/kWh) — added to spot price
-# Source: Bundesnetzagentur Monitoringbericht 2024
+# BNetzA regulated fixed costs 2025 (EUR/kWh) — added to spot price
+# Source: Bundesnetzagentur Monitoringbericht 2025
 FIXED_COSTS = {
     "network_fee":    0.0663,   # Netzentgelt (avg. German commercial depot)
     "concession":     0.01992,  # Konzessionsabgabe
@@ -209,7 +209,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Add all features needed for the price forecasting model.
 
-    Lag features (Liu 2023; Lago et al. 2021):
+    Lag features (Liu 2023; Lago et al. 2022):
         - Recent: t-1 .. t-4  (last hour in 15-min slots)
         - Same time yesterday: t-96
         - Same time last week: t-672
@@ -366,9 +366,9 @@ def update_excel(df_raw: pd.DataFrame,
 
 def main():
     parser = argparse.ArgumentParser(description="Fetch SMARD.de EPEX price data")
-    parser.add_argument("--years", nargs=2, type=int, default=[2022, 2024],
+    parser.add_argument("--years", nargs=2, type=int, default=[2022, 2025],
                         metavar=("START", "END"),
-                        help="Year range (default: 2022 2024)")
+                        help="Year range (default: 2022 2025)")
     parser.add_argument("--test", action="store_true",
                         help="Test mode: fetch only ~1 month of data")
     parser.add_argument("--skip-download", action="store_true",
