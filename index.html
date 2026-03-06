@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S.KOe COOL — V2G Optimisation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --blue:#1a56db; --blue-l:#e8f0fe;
+  --green:#057a55; --green-l:#def7ec;
+  --amber:#b45309; --amber-l:#fef3c7;
+  --red:#c81e1e; --red-l:#fde8e8;
+  --gray:#374151; --gray-l:#f9fafb;
+  --border:#d1d5db; --radius:8px;
+}
+body { font-family:'Segoe UI',system-ui,sans-serif; background:#f3f4f6; color:var(--gray); }
+header {
+  background:linear-gradient(135deg,#1e3a5f,#1a56db);
+  color:white; padding:18px 32px;
+  display:flex; align-items:center; gap:16px;
+  box-shadow:0 2px 8px rgba(0,0,0,.2);
+}
+header h1 { font-size:1.3rem; font-weight:700; }
+header p  { font-size:0.8rem; opacity:.8; margin-top:2px; }
+.logo { width:44px;height:44px;background:rgba(255,255,255,.15);border-radius:10px;
+        display:flex;align-items:center;justify-content:center;font-size:22px; }
+.layout {
+  display:grid; grid-template-columns:210px 1fr;
+  max-width:1300px; margin:22px auto; gap:20px; padding:0 20px;
+}
+.sidebar { position:sticky;top:20px;height:fit-content;
+  background:white;border-radius:var(--radius);
+  box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden; }
+.sidebar-title { padding:10px 14px;font-size:.72rem;font-weight:700;
+  text-transform:uppercase;letter-spacing:.05em;color:#6b7280;
+  border-bottom:1px solid var(--border);background:var(--gray-l); }
+.nav-item { display:flex;align-items:center;gap:9px;padding:9px 14px;
+  cursor:pointer;font-size:.85rem;color:#374151;
+  border-left:3px solid transparent;transition:all .15s; }
+.nav-item:hover { background:var(--blue-l);color:var(--blue); }
+.nav-item.active { background:var(--blue-l);color:var(--blue);
+  border-left-color:var(--blue);font-weight:600; }
+.main { display:flex;flex-direction:column;gap:18px; }
+.card { background:white;border-radius:var(--radius);
+  box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden; }
+.card-header { padding:13px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px; }
+.card-icon { width:30px;height:30px;border-radius:7px;
+  display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0; }
+.card-header h2 { font-size:.95rem;font-weight:700;color:#111827; }
+.card-header p  { font-size:.75rem;color:#9ca3af;margin-top:1px; }
+.card-body { padding:18px;display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px; }
+.card-body.wide { grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); }
+.kpi-bar { background:white;border-radius:var(--radius);
+  box-shadow:0 1px 4px rgba(0,0,0,.08);
+  padding:12px 18px;display:flex;flex-wrap:wrap;gap:10px 28px;align-items:center; }
+.kpi-bar-title { font-size:.7rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:.05em;color:#6b7280;width:100%; }
+.kpi { display:flex;flex-direction:column;align-items:center; }
+.kpi-v { font-size:1.15rem;font-weight:700;color:var(--blue); }
+.kpi-l { font-size:.68rem;color:#9ca3af;margin-top:2px;text-align:center; }
+.kpi-sep { width:1px;height:32px;background:var(--border); }
+.field { display:flex;flex-direction:column;gap:4px; }
+.field label { font-size:.75rem;font-weight:600;color:#374151;
+  display:flex;align-items:center;gap:5px; }
+.unit { font-weight:400;color:#9ca3af;font-size:.68rem;
+  background:#f3f4f6;padding:1px 5px;border-radius:4px; }
+.src  { font-weight:400;color:#6b7280;font-size:.67rem;margin-left:auto; }
+input[type=number],input[type=text],select {
+  padding:7px 9px;border:1px solid var(--border);border-radius:6px;
+  font-size:.85rem;color:#111827;background:white;
+  transition:border-color .15s,box-shadow .15s;width:100%; }
+input:focus,select:focus { outline:none;border-color:var(--blue);
+  box-shadow:0 0 0 3px rgba(26,86,219,.1); }
+input.changed { border-color:#d97706;background:#fffbeb; }
+.note { grid-column:1/-1;padding:9px 13px;border-radius:6px;
+  font-size:.78rem;display:flex;gap:7px;align-items:flex-start; }
+.note.warn { background:var(--amber-l);color:var(--amber); }
+.note.info { background:var(--blue-l);color:var(--blue); }
+.cost-table { grid-column:1/-1; }
+.cost-row { display:grid;grid-template-columns:1fr 120px 90px;
+  gap:6px 12px;align-items:center;padding:5px 0;
+  border-bottom:1px solid #f3f4f6;font-size:.83rem; }
+.cost-row input { width:110px; }
+.cost-total { background:#eff6ff;border-radius:6px;padding:9px 13px;
+  display:flex;justify-content:space-between;align-items:center;
+  font-weight:700;color:var(--blue);margin-top:6px; }
+.chips { grid-column:1/-1;display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px; }
+.chip { background:var(--gray-l);border-radius:6px;padding:7px 11px; }
+.chip .cv { font-size:.95rem;font-weight:700;color:var(--blue); }
+.chip .cl { font-size:.68rem;color:#9ca3af; }
+.action-bar { background:white;border-radius:var(--radius);
+  box-shadow:0 1px 4px rgba(0,0,0,.08);
+  padding:18px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap; }
+.action-bar .hint { font-size:.78rem;color:#6b7280;flex:1;min-width:180px; }
+.btn { padding:9px 22px;border-radius:7px;font-size:.88rem;
+  font-weight:600;cursor:pointer;border:none;transition:all .15s;
+  display:flex;align-items:center;gap:7px; }
+.btn-primary { background:var(--blue);color:white; }
+.btn-primary:hover { background:#1447c0;transform:translateY(-1px);
+  box-shadow:0 4px 12px rgba(26,86,219,.3); }
+.btn-primary:disabled { background:#9ca3af;cursor:not-allowed;transform:none;box-shadow:none; }
+.btn-secondary { background:white;color:var(--gray);border:1px solid var(--border); }
+.btn-secondary:hover { background:var(--gray-l); }
+.btn-danger { background:var(--red-l);color:var(--red);border:1px solid #fca5a5; }
+.badge { background:#d97706;color:white;border-radius:12px;
+  padding:2px 9px;font-size:.72rem;font-weight:700; }
+#results { display:none; }
+#results.show { display:flex;flex-direction:column;gap:18px; }
+.results-header { background:linear-gradient(135deg,#065f46,#057a55);
+  color:white;border-radius:var(--radius);padding:18px 22px; }
+.results-header h2 { font-size:1.1rem;font-weight:700; }
+.results-header p  { font-size:.8rem;opacity:.8;margin-top:3px; }
+.scenario-grid { display:grid;grid-template-columns:repeat(5,1fr);gap:12px; }
+.s-card { background:white;border-radius:var(--radius);
+  box-shadow:0 1px 4px rgba(0,0,0,.08);padding:14px 12px;text-align:center; }
+.s-label { font-size:.72rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:.04em;margin-bottom:8px; }
+.s-net { font-size:1.4rem;font-weight:800; }
+.s-sub { font-size:.7rem;color:#9ca3af;margin-top:2px; }
+.s-saving { font-size:.82rem;font-weight:700;margin-top:6px;padding:3px 8px;
+  border-radius:10px;display:inline-block; }
+.saving-pos { background:var(--green-l);color:var(--green); }
+.saving-neg { background:var(--red-l);color:var(--red); }
+.saving-zero{ background:var(--gray-l);color:#6b7280; }
+.chart-grid { display:grid;grid-template-columns:1fr 1fr;gap:18px; }
+.chart-card { background:white;border-radius:var(--radius);
+  box-shadow:0 1px 4px rgba(0,0,0,.08);padding:16px; }
+.chart-card h3 { font-size:.88rem;font-weight:700;color:#374151;margin-bottom:12px; }
+.chart-wrap { position:relative;height:220px; }
+.deg-table { width:100%;border-collapse:collapse;font-size:.82rem; }
+.deg-table th { background:#f3f4f6;padding:7px 10px;text-align:left;
+  font-weight:700;border-bottom:2px solid var(--border); }
+.deg-table td { padding:6px 10px;border-bottom:1px solid #f3f4f6; }
+.deg-table tr.active-row { background:var(--green-l); }
+.deg-table tr.inactive-row td { color:#9ca3af; }
+.tip-row { background:#fef3c7;font-weight:700; }
+.spinner-wrap { display:flex;align-items:center;gap:10px;
+  padding:14px 18px;background:var(--blue-l);border-radius:var(--radius);
+  color:var(--blue);font-size:.88rem;font-weight:600; }
+.spin { width:20px;height:20px;border:3px solid rgba(26,86,219,.2);
+  border-top-color:var(--blue);border-radius:50%;
+  animation:spin .7s linear infinite;flex-shrink:0; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.error-box { background:var(--red-l);color:var(--red);border-radius:var(--radius);
+  padding:14px 18px;font-size:.88rem; }
+@media(max-width:900px) {
+  .layout { grid-template-columns:1fr; }
+  .sidebar { position:static; }
+  .scenario-grid { grid-template-columns:1fr 1fr; }
+  .chart-grid { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">&#x1F69B;</div>
+  <div>
+    <h1>S.KOe COOL &mdash; V2G Optimisation</h1>
+    <p>Schmitz Cargobull &middot; Edit parameters and run all 5 scenarios in your browser</p>
+  </div>
+  <div style="margin-left:auto;">
+    <span id="badge" class="badge" style="display:none">0 changes</span>
+  </div>
+</header>
+
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-title">Sections</div>
+    <a class="nav-item active" onclick="navTo('battery',this)">&#x1F50B; Battery Pack</a>
+    <a class="nav-item" onclick="navTo('simulation',this)">&#x2699;&#xFE0F; Simulation</a>
+    <a class="nav-item" onclick="navTo('prices',this)">&#x1F4B6; Electricity Prices</a>
+    <a class="nav-item" onclick="navTo('v2g',this)">&#x26A1; V2G Premiums</a>
+    <a class="nav-item" onclick="navTo('fleet',this)">&#x1F69B; Fleet &amp; Season</a>
+    <a class="nav-item" onclick="navTo('run',this)">&#x25B6; Run</a>
+    <a class="nav-item" onclick="navTo('results',this)" id="resultsNav" style="display:none">&#x1F4CA; Results</a>
+  </nav>
+
+  <div class="main">
+
+    <!-- KPI Bar -->
+    <div class="kpi-bar">
+      <div class="kpi-bar-title">&#x1F4CA; Live Derived Values</div>
+      <div class="kpi"><span class="kpi-v" id="kv_emin">--</span><span class="kpi-l">E_min (kWh)</span></div>
+      <div class="kpi-sep"></div>
+      <div class="kpi"><span class="kpi-v" id="kv_emax">--</span><span class="kpi-l">E_max (kWh)</span></div>
+      <div class="kpi-sep"></div>
+      <div class="kpi"><span class="kpi-v" id="kv_range">--</span><span class="kpi-l">Operating Range (kWh)</span></div>
+      <div class="kpi-sep"></div>
+      <div class="kpi"><span class="kpi-v" id="kv_rte">--</span><span class="kpi-l">Round-trip &eta;</span></div>
+      <div class="kpi-sep"></div>
+      <div class="kpi"><span class="kpi-v" id="kv_einit">--</span><span class="kpi-l">E_init (kWh)</span></div>
+      <div class="kpi-sep"></div>
+      <div class="kpi"><span class="kpi-v" id="kv_efin">--</span><span class="kpi-l">E_fin (kWh)</span></div>
+      <div class="kpi-sep"></div>
+      <div class="kpi"><span class="kpi-v" id="kv_fixed">--</span><span class="kpi-l">Fixed Net (&#x20AC;/kWh)</span></div>
+      <div class="kpi-sep"></div>
+      <div class="kpi"><span class="kpi-v" id="kv_buy10">--</span><span class="kpi-l">Buy @ spot=0.10</span></div>
+    </div>
+
+    <!-- BATTERY -->
+    <div class="card" id="battery">
+      <div class="card-header">
+        <div class="card-icon" style="background:#dbeafe">&#x1F50B;</div>
+        <div><h2>Battery Pack &mdash; S.KOe COOL 82 kWh</h2>
+          <p>Schmitz Cargobull 2025 &middot; ISO 15118-2 &middot; IEC 62196</p></div>
+      </div>
+      <div class="card-body wide">
+        <div class="note warn">&#x26A0;&#xFE0F; E_min = Usable &times; SoC_min%, E_max = Usable &times; SoC_max%. Derived values update live above.</div>
+        <div class="field"><label>Battery Capacity (total) <span class="unit">kWh</span><span class="src">Schmitz 2025</span></label>
+          <input type="number" id="battery_capacity_kWh" step="0.1" min="1"></div>
+        <div class="field"><label>Usable Capacity <span class="unit">kWh</span><span class="src">Schmitz: usable window</span></label>
+          <input type="number" id="usable_capacity_kWh" step="0.1" min="1"></div>
+        <div class="field"><label>SoC Minimum <span class="unit">%</span><span class="src">Agora 2025: cold-chain floor</span></label>
+          <input type="number" id="soc_min_pct" step="0.5" min="0" max="50"></div>
+        <div class="field"><label>SoC Maximum <span class="unit">%</span><span class="src">Agora 2025: cycle ceiling</span></label>
+          <input type="number" id="soc_max_pct" step="0.5" min="50" max="100"></div>
+        <div class="field"><label>Max Charge Power <span class="unit">kW</span><span class="src">ISO 15118-2 Mode 3</span></label>
+          <input type="number" id="charge_power_kW" step="0.5" min="1"></div>
+        <div class="field"><label>Max V2G Discharge Power <span class="unit">kW</span><span class="src">Bidirectional OBC</span></label>
+          <input type="number" id="discharge_power_kW" step="0.5" min="0.5"></div>
+        <div class="field"><label>Charge Efficiency &eta;_c <span class="unit">&mdash;</span><span class="src">IEC 62196</span></label>
+          <input type="number" id="eta_charge" step="0.005" min="0.5" max="1"></div>
+        <div class="field"><label>Discharge Efficiency &eta;_d <span class="unit">&mdash;</span><span class="src">IEC 62196</span></label>
+          <input type="number" id="eta_discharge" step="0.005" min="0.5" max="1"></div>
+        <div class="field"><label>Degradation Cost <span class="unit">&#x20AC;/kWh cycled</span><span class="src">Agora 2025, Table 3</span></label>
+          <input type="number" id="deg_cost_eur_kwh" step="0.005" min="0.01" max="0.25"></div>
+        <div class="chips" id="battChips"></div>
+      </div>
+    </div>
+
+    <!-- SIMULATION -->
+    <div class="card" id="simulation">
+      <div class="card-header">
+        <div class="card-icon" style="background:#d1fae5">&#x2699;&#xFE0F;</div>
+        <div><h2>Simulation Settings</h2><p>SoC targets &middot; Dwell profile &middot; MPC noise</p></div>
+      </div>
+      <div class="card-body">
+        <div class="field"><label>Initial SoC (arrival) <span class="unit">%</span></label>
+          <input type="number" id="soc_init_pct" step="1" min="0" max="100"></div>
+        <div class="field"><label>Final SoC (departure) <span class="unit">%</span></label>
+          <input type="number" id="soc_final_pct" step="1" min="0" max="100"></div>
+        <div class="field"><label>Dwell Profile</label>
+          <select id="dwell_profile">
+            <option value="Extended">Extended (21-07 + 12-18 = 16h/day)</option>
+            <option value="NightOnly">Night Only (21-07 = 10h/day)</option>
+          </select></div>
+        <div class="field"><label>MPC Price Noise &sigma; <span class="unit">&#x20AC;/kWh</span><span class="src">Liu 2023</span></label>
+          <input type="number" id="mpc_price_noise_std" step="0.001" min="0" max="0.1"></div>
+        <div class="note info">&#x1F4A1; Extended = night depot charge + midday hub stop. More plug time = more V2G opportunities.</div>
+      </div>
+    </div>
+
+    <!-- PRICES -->
+    <div class="card" id="prices">
+      <div class="card-header">
+        <div class="card-icon" style="background:#fef3c7">&#x1F4B6;</div>
+        <div><h2>Electricity Price Components</h2><p>BNetzA regulated tariffs 2024 &middot; EUR/kWh excl. VAT</p></div>
+      </div>
+      <div class="card-body">
+        <div class="note info">&#x1F4D0; Buy price = (EPEX_spot + Fixed_Net) &times; (1 + VAT)</div>
+        <div class="cost-table">
+          <div class="cost-row" style="font-weight:700;font-size:.75rem;border-bottom:2px solid var(--border)">
+            <span>Component</span><span>EUR/kWh</span><span>Source</span></div>
+          <div class="cost-row"><span>Network fee (Netzentgelt)</span>
+            <input type="number" id="network_fee" step="0.001" min="0" max="0.5">
+            <span style="font-size:.72rem;color:#9ca3af">Avg. depot</span></div>
+          <div class="cost-row"><span>Concession (Konzessionsabgabe)</span>
+            <input type="number" id="concession" step="0.0001" min="0" max="0.1">
+            <span style="font-size:.72rem;color:#9ca3af">BNetzA 2024</span></div>
+          <div class="cost-row"><span>Offshore surcharge</span>
+            <input type="number" id="offshore_levy" step="0.0001" min="0" max="0.1">
+            <span style="font-size:.72rem;color:#9ca3af">BNetzA 2024</span></div>
+          <div class="cost-row"><span>CHP levy (KWKG-Umlage)</span>
+            <input type="number" id="chp_levy" step="0.0001" min="0" max="0.05">
+            <span style="font-size:.72rem;color:#9ca3af">BNetzA 2024</span></div>
+          <div class="cost-row"><span>Electricity tax (Stromsteuer)</span>
+            <input type="number" id="electricity_tax" step="0.001" min="0" max="0.1">
+            <span style="font-size:.72rem;color:#9ca3af">§3 StromStG</span></div>
+          <div class="cost-row"><span>NEV-19 levy</span>
+            <input type="number" id="nev19" step="0.0001" min="0" max="0.1">
+            <span style="font-size:.72rem;color:#9ca3af">BNetzA 2024</span></div>
+          <div class="cost-row"><span>VAT rate</span>
+            <input type="number" id="vat" step="0.01" min="0" max="0.3">
+            <span style="font-size:.72rem;color:#9ca3af">Umsatzsteuer</span></div>
+          <div class="cost-total">
+            <span>Fixed Net Total (FIXED_NET)</span>
+            <span id="fixed_total">--</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- V2G PREMIUMS -->
+    <div class="card" id="v2g">
+      <div class="card-header">
+        <div class="card-icon" style="background:#fde8e8">&#x26A1;</div>
+        <div><h2>V2G / Grid Service Premiums</h2><p>FCR + aFRR &middot; Agora Verkehrswende 2025, Fig. 4</p></div>
+      </div>
+      <div class="card-body">
+        <div class="note info">&#x1F4A1; V2G price = Buy + FCR_premium (peak window) + aFRR_premium (morning ramp)</div>
+        <div class="field"><label>FCR Peak Premium <span class="unit">&#x20AC;/kWh</span><span class="src">Agora 2025</span></label>
+          <input type="number" id="fcr_premium_peak" step="0.005" min="0" max="0.5"></div>
+        <div class="field"><label>FCR Window Start <span class="unit">hour 0-23</span></label>
+          <input type="number" id="fcr_window_start" step="1" min="0" max="23"></div>
+        <div class="field"><label>FCR Window End <span class="unit">hour (exclusive)</span></label>
+          <input type="number" id="fcr_window_end" step="1" min="1" max="24"></div>
+        <div class="field"><label>aFRR Morning Premium <span class="unit">&#x20AC;/kWh</span><span class="src">Agora 2025</span></label>
+          <input type="number" id="afrr_premium" step="0.005" min="0" max="0.2"></div>
+        <div class="field"><label>aFRR Window Start <span class="unit">hour 0-23</span></label>
+          <input type="number" id="afrr_window_start" step="1" min="0" max="23"></div>
+        <div class="field"><label>aFRR Window End <span class="unit">hour (exclusive)</span></label>
+          <input type="number" id="afrr_window_end" step="1" min="1" max="24"></div>
+        <div class="chips" id="v2gChips"></div>
+      </div>
+    </div>
+
+    <!-- FLEET -->
+    <div class="card" id="fleet">
+      <div class="card-header">
+        <div class="card-icon" style="background:#e0e7ff">&#x1F69B;</div>
+        <div><h2>Fleet &amp; Season</h2><p>Fleet scaling &middot; Season for price profile</p></div>
+      </div>
+      <div class="card-body">
+        <div class="field"><label>Fleet Size <span class="unit">trailers</span></label>
+          <input type="number" id="fleet_size" step="1" min="1" max="500"></div>
+        <div class="field"><label>Season</label>
+          <select id="season">
+            <option value="winter">Winter weekday</option>
+            <option value="summer">Summer weekday</option>
+          </select></div>
+      </div>
+    </div>
+
+    <!-- ACTION BAR -->
+    <div class="action-bar" id="run">
+      <div class="hint">Changed fields shown in amber. Click <b>Run Optimisation</b> to compute all 5 scenarios.</div>
+      <button class="btn btn-danger" onclick="resetAll()">&#x21BA; Reset</button>
+      <button class="btn btn-secondary" onclick="exportJSON()">&#x2B07; Export JSON</button>
+      <button class="btn btn-primary" id="runBtn" onclick="runOpt()">&#x25B6; Run Optimisation</button>
+    </div>
+
+    <!-- Status -->
+    <div id="statusWrap"></div>
+
+    <!-- RESULTS -->
+    <div id="results">
+      <div class="results-header">
+        <h2>&#x1F4CA; Optimisation Results</h2>
+        <p id="resultsSubtitle"></p>
+      </div>
+      <div class="scenario-grid" id="scenarioCards"></div>
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>&#x1F4B0; Daily Net Cost &mdash; All Scenarios</h3>
+          <div class="chart-wrap"><canvas id="chartCost"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>&#x26A1; V2G Discharge vs Price (Scenario C)</h3>
+          <div class="chart-wrap"><canvas id="chartV2G"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>&#x1F50B; Battery State of Charge Traces</h3>
+          <div class="chart-wrap"><canvas id="chartSoC"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>&#x1F4C9; Degradation Sensitivity Sweep</h3>
+          <div class="chart-wrap"><canvas id="chartDeg"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="background:#fef3c7">&#x1F4C9;</div>
+          <div><h2>Degradation Sensitivity Table</h2><p id="tippingText"></p></div>
+        </div>
+        <div style="padding:16px;overflow-x:auto">
+          <table class="deg-table" id="degTable"></table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const DEFAULTS = {
+  battery_capacity_kWh:82.0, usable_capacity_kWh:65.6,
+  soc_min_pct:20.0, soc_max_pct:95.0,
+  charge_power_kW:22.0, discharge_power_kW:11.0,
+  eta_charge:0.92, eta_discharge:0.92, deg_cost_eur_kwh:0.07,
+  soc_init_pct:45.0, soc_final_pct:80.0,
+  dwell_profile:"Extended", mpc_price_noise_std:0.012,
+  network_fee:0.0663, concession:0.01992, offshore_levy:0.00816,
+  chp_levy:0.00277, electricity_tax:0.0205, nev19:0.01558, vat:0.19,
+  fcr_premium_peak:0.132, fcr_window_start:16, fcr_window_end:20,
+  afrr_premium:0.040, afrr_window_start:7, afrr_window_end:9,
+  fleet_size:1, season:"winter",
+};
+const COLORS = {A:'#9ca3af',B:'#2196F3',C:'#00BCD4',D:'#FF7700',E:'#CC3300'};
+const LABELS = {A:'A — Dumb',B:'B — Smart (no V2G)',C:'C — MILP',D:'D — MPC Perfect',E:'E — MPC Noisy'};
+let _charts = {};
+
+window.onload = () => {
+  for (const [k,v] of Object.entries(DEFAULTS)) {
+    const el = document.getElementById(k);
+    if (!el) continue;
+    el.value = v; el.dataset.def = v;
+    el.addEventListener('input',  () => { markChanged(el); updateDerived(); });
+    el.addEventListener('change', () => { markChanged(el); updateDerived(); });
+  }
+  updateDerived();
+};
+
+function markChanged(el) {
+  el.classList.toggle('changed', String(el.value) !== String(el.dataset.def));
+  const n = document.querySelectorAll('.changed').length;
+  const b = document.getElementById('badge');
+  b.style.display = n ? 'inline' : 'none';
+  b.textContent = n + ' change' + (n !== 1 ? 's' : '');
+}
+
+function g(id)  { return parseFloat(document.getElementById(id)?.value) || 0; }
+
+function updateDerived() {
+  const usable = g('usable_capacity_kWh');
+  const emin   = usable * g('soc_min_pct') / 100;
+  const emax   = usable * g('soc_max_pct') / 100;
+  const rte    = g('eta_charge') * g('eta_discharge');
+  const einit  = usable * g('soc_init_pct') / 100;
+  const efin   = usable * g('soc_final_pct') / 100;
+  const fixed  = g('network_fee')+g('concession')+g('offshore_levy')
+               + g('chp_levy')+g('electricity_tax')+g('nev19');
+  const buy10  = (0.10 + fixed) * (1 + g('vat'));
+
+  set('kv_emin',  emin.toFixed(2));
+  set('kv_emax',  emax.toFixed(2));
+  set('kv_range', (emax-emin).toFixed(2));
+  set('kv_rte',   (rte*100).toFixed(1)+'%');
+  set('kv_einit', einit.toFixed(2));
+  set('kv_efin',  efin.toFixed(2));
+  set('kv_fixed', fixed.toFixed(5));
+  set('kv_buy10', buy10.toFixed(4));
+  set('fixed_total', fixed.toFixed(5)+' EUR/kWh');
+
+  document.getElementById('battChips').innerHTML = `
+    <div class="chip"><div class="cv">${emin.toFixed(2)} kWh</div><div class="cl">E_min (SoC floor)</div></div>
+    <div class="chip"><div class="cv">${emax.toFixed(2)} kWh</div><div class="cl">E_max (SoC ceiling)</div></div>
+    <div class="chip"><div class="cv">${(emax-emin).toFixed(2)} kWh</div><div class="cl">Operating range</div></div>
+    <div class="chip"><div class="cv">${(rte*100).toFixed(1)}%</div><div class="cl">Round-trip &eta;</div></div>
+    <div class="chip"><div class="cv">${einit.toFixed(2)} kWh</div><div class="cl">E_init (arrival)</div></div>
+    <div class="chip"><div class="cv">${efin.toFixed(2)} kWh</div><div class="cl">E_fin (departure)</div></div>`;
+
+  document.getElementById('v2gChips').innerHTML = `
+    <div class="chip"><div class="cv">${g('fcr_window_start')}:00&ndash;${g('fcr_window_end')}:00</div><div class="cl">FCR active window</div></div>
+    <div class="chip"><div class="cv">+${g('fcr_premium_peak').toFixed(3)} &euro;/kWh</div><div class="cl">FCR premium</div></div>
+    <div class="chip"><div class="cv">${g('afrr_window_start')}:00&ndash;${g('afrr_window_end')}:00</div><div class="cl">aFRR active window</div></div>
+    <div class="chip"><div class="cv">+${g('afrr_premium').toFixed(3)} &euro;/kWh</div><div class="cl">aFRR premium</div></div>`;
+}
+
+function set(id,val) { const el=document.getElementById(id); if(el) el.textContent=val; }
+
+function collectValues() {
+  const out = {};
+  for (const k of Object.keys(DEFAULTS)) {
+    const el = document.getElementById(k);
+    if (!el) continue;
+    out[k] = typeof DEFAULTS[k]==='number' ? parseFloat(el.value) : el.value;
+  }
+  return out;
+}
+
+function resetAll() {
+  for (const [k,v] of Object.entries(DEFAULTS)) {
+    const el = document.getElementById(k);
+    if (el) { el.value=v; el.classList.remove('changed'); }
+  }
+  document.getElementById('badge').style.display='none';
+  updateDerived();
+}
+
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(collectValues(),null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download='v2g_config.json'; a.click();
+}
+
+function navTo(id,el) {
+  document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  el.classList.add('active');
+}
+
+async function runOpt() {
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true; btn.textContent = '⏳ Running…';
+  showStatus('loading','Computing all 5 scenarios…');
+
+  try {
+    const r = await fetch('/api/optimize', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(collectValues()),
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (!r.ok) throw new Error('Server error ' + r.status);
+    const data = await r.json();
+    showStatus('','');
+    renderResults(data);
+  } catch(err) {
+    showStatus('error','Error: ' + err.message);
+  } finally {
+    btn.disabled=false; btn.innerHTML='&#x25B6; Run Optimisation';
+  }
+}
+
+function showStatus(type,msg) {
+  const w = document.getElementById('statusWrap');
+  if (!msg) { w.innerHTML=''; return; }
+  w.innerHTML = type==='loading'
+    ? `<div class="spinner-wrap"><div class="spin"></div>${msg}</div>`
+    : `<div class="error-box">${msg}</div>`;
+}
+
+function renderResults(data) {
+  const {scenarios,deg_sweep,tipping_point,hours,buy_price,v2g_price,fleet_size,season} = data;
+  const el = document.getElementById('results');
+  el.classList.add('show');
+  document.getElementById('resultsNav').style.display='';
+  set('resultsSubtitle',`Season: ${season} · Fleet: ${fleet_size} trailer(s) · All costs in EUR/day`);
+  el.scrollIntoView({behavior:'smooth',block:'start'});
+
+  const grid = document.getElementById('scenarioCards');
+  grid.innerHTML='';
+  ['A','B','C','D','E'].forEach(k => {
+    const s=scenarios[k], sv=s.saving_vs_dumb;
+    const cls=sv>0.01?'saving-pos':sv<-0.01?'saving-neg':'saving-zero';
+    const lbl=sv>0.01?`saves €${sv.toFixed(3)}/day`:sv<-0.01?`costs €${Math.abs(sv).toFixed(3)} more`:'baseline';
+    grid.innerHTML+=`
+      <div class="s-card">
+        <div class="s-label" style="color:${COLORS[k]}">${LABELS[k]}</div>
+        <div class="s-net" style="color:${COLORS[k]}">${s.net_cost>=0?'€':'-€'}${Math.abs(s.net_cost).toFixed(3)}</div>
+        <div class="s-sub">net cost/day</div>
+        <div class="s-sub" style="margin-top:4px">V2G rev: €${s.v2g_revenue.toFixed(3)}</div>
+        <div class="s-sub">V2G: ${s.v2g_kwh.toFixed(2)} kWh</div>
+        <div class="s-sub">Deg: €${s.deg_cost.toFixed(3)}</div>
+        <div><span class="s-saving ${cls}">${lbl}</span></div>
+        <div class="s-sub" style="margin-top:4px">Annual: €${s.annual_saving>=0?'+':''}${s.annual_saving.toFixed(0)}/yr</div>
+      </div>`;
+  });
+
+  destroyCharts();
+
+  _charts.cost = new Chart(document.getElementById('chartCost'),{
+    type:'bar',
+    data:{ labels:['A','B','C','D','E'].map(k=>LABELS[k]),
+      datasets:[{label:'Net Cost (€/day)',
+        data:['A','B','C','D','E'].map(k=>scenarios[k].net_cost),
+        backgroundColor:['A','B','C','D','E'].map(k=>COLORS[k])}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{title:{display:true,text:'€/day'}}}}
+  });
+
+  _charts.v2g = new Chart(document.getElementById('chartV2G'),{
+    type:'bar',
+    data:{ labels:hours,
+      datasets:[
+        {type:'bar',label:'V2G Discharge C (kW)',data:scenarios['C'].p_discharge,
+          backgroundColor:'rgba(0,188,212,0.6)',yAxisID:'y'},
+        {type:'line',label:'V2G Price (€/kWh)',data:v2g_price,
+          borderColor:'#007700',pointRadius:0,borderWidth:1.5,yAxisID:'y2'},
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{y:{title:{display:true,text:'kW'}},
+              y2:{position:'right',title:{display:true,text:'€/kWh'}}}}
+  });
+
+  _charts.soc = new Chart(document.getElementById('chartSoC'),{
+    type:'line',
+    data:{ labels:hours,
+      datasets:['A','B','C','D','E'].map(k=>({
+        label:LABELS[k], data:scenarios[k].soc_profile,
+        borderColor:COLORS[k], pointRadius:0, borderWidth:2, fill:false,
+        borderDash:['D','E'].includes(k)?[4,3]:undefined,
+      }))},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{y:{title:{display:true,text:'kWh'}}},
+      plugins:{legend:{labels:{boxWidth:12,font:{size:10}}}}}
+  });
+
+  _charts.deg = new Chart(document.getElementById('chartDeg'),{
+    type:'line',
+    data:{ labels:deg_sweep.map(d=>d.deg.toFixed(3)),
+      datasets:[
+        {label:'Net Cost',data:deg_sweep.map(d=>d.net_cost),
+          borderColor:'#00BCD4',pointRadius:3,borderWidth:2},
+        {label:'V2G Revenue',data:deg_sweep.map(d=>d.v2g_rev),
+          borderColor:'#FF7700',borderDash:[4,3],pointRadius:3,borderWidth:2},
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{title:{display:true,text:'Deg cost (€/kWh cycled)'}},
+              y:{title:{display:true,text:'€/day'}}}}
+  });
+
+  set('tippingText', tipping_point>0
+    ? `V2G profitable up to ~€${tipping_point.toFixed(3)}/kWh degradation`
+    : 'V2G not profitable at any tested level');
+
+  const table = document.getElementById('degTable');
+  table.innerHTML=`<tr><th>Deg Cost (€/kWh)</th><th>Net Cost (€/day)</th>
+    <th>V2G Revenue (€/day)</th><th>V2G Export (kWh)</th><th>V2G Active?</th></tr>`;
+  deg_sweep.forEach(d => {
+    const isTip = Math.abs(d.deg - tipping_point) < 0.001;
+    const cls   = isTip?'tip-row':d.active?'active-row':'inactive-row';
+    table.innerHTML+=`<tr class="${cls}">
+      <td>${d.deg.toFixed(4)}${isTip?' ← tipping point':''}</td>
+      <td>€${d.net_cost.toFixed(4)}</td>
+      <td>€${d.v2g_rev.toFixed(4)}</td>
+      <td>${d.v2g_kwh.toFixed(3)}</td>
+      <td>${d.active?'✅ Yes':'❌ No'}</td></tr>`;
+  });
+}
+
+function destroyCharts() {
+  Object.values(_charts).forEach(c=>c?.destroy()); _charts={};
+}
+</script>
+</body>
+</html>
