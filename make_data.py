@@ -175,20 +175,69 @@ spot_summer = np.select(
 
 buy_winter = (spot_winter + fixed_net) * (1 + VAT)
 buy_summer = (spot_summer + fixed_net) * (1 + VAT)
-v2g_winter = buy_winter + np.where((hours >= 16) & (hours < 20), 0.132, 0.0)
-v2g_summer = buy_summer + np.where((hours >= 17) & (hours < 20), 0.098, 0.0)  # smaller premium in summer
+
+# FCR/aFRR premium — SET TO 0.0 to disable ancillary services
+# Change back to 0.132 / 0.098 when you want to include FCR/aFRR
+FCR_PREMIUM_WINTER = 0.0   # was 0.132 — set to 0.0 to disable
+FCR_PREMIUM_SUMMER = 0.0   # was 0.098 — set to 0.0 to disable
+
+v2g_winter = buy_winter + np.where((hours >= 16) & (hours < 20), FCR_PREMIUM_WINTER, 0.0)
+v2g_summer = buy_summer + np.where((hours >= 17) & (hours < 20), FCR_PREMIUM_SUMMER, 0.0)
+
+# ── Weekend price profiles ────────────────────────────────────────────────────
+# Weekend = Saturday/Sunday. Lower industrial demand → lower, flatter EPEX prices.
+# Trailer is at depot ALL DAY (plugged = 24h) → best V2G opportunity window.
+# Source: EPEX SMARD.de 2024 weekend average profile, same BNetzA fixed costs.
+spot_weekend_winter = np.select(
+    [
+        (hours >= 0)  & (hours < 6),
+        (hours >= 6)  & (hours < 9),
+        (hours >= 9)  & (hours < 12),
+        (hours >= 12) & (hours < 16),
+        (hours >= 16) & (hours < 20),
+        (hours >= 20) & (hours < 24),
+    ],
+    [0.038, 0.062, 0.085, 0.078, 0.091, 0.055],
+    default=0.038
+)
+spot_weekend_summer = np.select(
+    [
+        (hours >= 0)  & (hours < 6),
+        (hours >= 6)  & (hours < 9),
+        (hours >= 9)  & (hours < 11),
+        (hours >= 11) & (hours < 15),   # solar midday suppression
+        (hours >= 15) & (hours < 18),
+        (hours >= 18) & (hours < 21),
+        (hours >= 21) & (hours < 24),
+    ],
+    [0.028, 0.048, 0.068, 0.005, 0.055, 0.088, 0.042],
+    default=0.028
+)
+buy_weekend_winter = (spot_weekend_winter + fixed_net) * (1 + VAT)
+buy_weekend_summer = (spot_weekend_summer + fixed_net) * (1 + VAT)
+# No FCR premium on weekends initially (same switch as weekdays)
+v2g_weekend_winter = buy_weekend_winter + np.where((hours >= 16) & (hours < 20), FCR_PREMIUM_WINTER, 0.0)
+v2g_weekend_summer = buy_weekend_summer + np.where((hours >= 17) & (hours < 20), FCR_PREMIUM_SUMMER, 0.0)
+
+# v2g_winter = buy_winter + np.where((hours >= 16) & (hours < 20), 0.132, 0.0)
+# v2g_summer = buy_summer + np.where((hours >= 17) & (hours < 20), 0.098, 0.0)  # smaller premium in summer
 
 seasonal_df = pd.DataFrame({
-    "Slot":                    slots,
-    "Time":                    time_labels,
-    "Hour":                    hours,
-    "Winter_EPEX_EUR_kWh":     np.round(spot_winter, 4),
-    "Summer_EPEX_EUR_kWh":     np.round(spot_summer, 4),
-    "Winter_Buy_EUR_kWh":      np.round(buy_winter, 4),
-    "Summer_Buy_EUR_kWh":      np.round(buy_summer, 4),
-    "Winter_V2G_EUR_kWh":      np.round(v2g_winter, 4),
-    "Summer_V2G_EUR_kWh":      np.round(v2g_summer, 4),
-    "Source": ["EPEX SMARD.de 2024 avg WD by season + BNetzA 2024"] * 96,
+    "Slot":                         slots,
+    "Time":                         time_labels,
+    "Hour":                         hours,
+    "Winter_EPEX_EUR_kWh":          np.round(spot_winter, 4),
+    "Summer_EPEX_EUR_kWh":          np.round(spot_summer, 4),
+    "Winter_Buy_EUR_kWh":           np.round(buy_winter, 4),
+    "Summer_Buy_EUR_kWh":           np.round(buy_summer, 4),
+    "Winter_V2G_EUR_kWh":           np.round(v2g_winter, 4),
+    "Summer_V2G_EUR_kWh":           np.round(v2g_summer, 4),
+    # ── NEW: weekend profiles ─────────────────────────────────────────────
+    "WkndWinter_Buy_EUR_kWh":       np.round(buy_weekend_winter, 4),
+    "WkndSummer_Buy_EUR_kWh":       np.round(buy_weekend_summer, 4),
+    "WkndWinter_V2G_EUR_kWh":       np.round(v2g_weekend_winter, 4),
+    "WkndSummer_V2G_EUR_kWh":       np.round(v2g_weekend_summer, 4),
+    "Source": ["EPEX SMARD.de 2024 avg by season/daytype + BNetzA 2024"] * 96,
 })
 
 # ── Write Excel file ──────────────────────────────────────────────────────────

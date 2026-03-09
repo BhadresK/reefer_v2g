@@ -572,8 +572,10 @@ HTML = r"""<!DOCTYPE html>
         <div class="field">
           <label>Season (single-day run)</label>
           <select id="season">
-            <option value="winter">Winter weekday</option>
-            <option value="summer">Summer weekday</option>
+            <option value="winter">Winter weekday (Mon–Fri, Oct–Mar)</option>
+            <option value="summer">Summer weekday (Mon–Fri, Apr–Sep)</option>
+            <option value="winter_weekend">Winter weekend (Sat–Sun, Oct–Mar, 24h plugged)</option>
+            <option value="summer_weekend">Summer weekend (Sat–Sun, Apr–Sep, 24h plugged)</option>
           </select>
         </div>
         <div class="field">

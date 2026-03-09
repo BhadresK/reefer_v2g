@@ -108,7 +108,13 @@ def load_prices(v2g: V2GParams, season: str = "winter") -> tuple:
     if DATA_FILE.exists():
         try:
             df = pd.read_excel(DATA_FILE, sheet_name="SeasonalPrices", engine="openpyxl")
-            if season == "summer":
+            if season == "summer_weekend":
+                buy   = df["WkndSummer_Buy_EUR_kWh"].values.astype(float)
+                v2g_p = df["WkndSummer_V2G_EUR_kWh"].values.astype(float)
+            elif season == "winter_weekend":
+                buy   = df["WkndWinter_Buy_EUR_kWh"].values.astype(float)
+                v2g_p = df["WkndWinter_V2G_EUR_kWh"].values.astype(float)
+            elif season == "summer":
                 buy   = df["Summer_Buy_EUR_kWh"].values.astype(float)
                 v2g_p = df["Summer_V2G_EUR_kWh"].values.astype(float)
             else:
@@ -184,9 +190,12 @@ def build_load_and_availability(v2g: V2GParams, dwell: str = "Extended") -> tupl
     N = v2g.n_slots
     h = np.arange(N) * v2g.dt_h
     tru = 2.8 + 1.2 * np.sin(2 * np.pi * np.arange(N) / N + np.pi)
-    if dwell == "NightOnly":
+    if dwell == "Weekend":
+        # Trailer at depot all day Saturday/Sunday — fully available 24h
+        plugged = np.ones(N)
+    elif dwell == "NightOnly":
         plugged = ((h >= 21) | (h < 7)).astype(float)
-    else:
+    else:  # Extended (default)
         plugged = ((h >= 21) | (h < 7) | ((h >= 12) & (h < 18))).astype(float)
     return tru, plugged
 
@@ -736,89 +745,66 @@ def main():
     # ══════════════════════════════════════════════════════════════════════════
     all_season_results = {}
 
-    for season in ["winter", "summer"]:
+    # ── Day types: weekday + weekend, both seasons ─────────────────────────
+    # Weekly structure: 5 weekdays + 2 weekend days
+    # Annual: 261 weekdays (130 winter + 131 summer approx) + 104 weekend days
+    DAY_TYPES = [
+        ("winter",         "Extended", 130, "Winter weekday  (Mon-Fri, Oct-Mar)"),
+        ("summer",         "Extended", 131, "Summer weekday  (Mon-Fri, Apr-Sep)"),
+        ("winter_weekend", "Weekend",   52, "Winter weekend  (Sat-Sun, Oct-Mar)"),
+        ("summer_weekend", "Weekend",   52, "Summer weekend  (Sat-Sun, Apr-Sep)"),
+    ]
+
+    annual_cost_total = 0.0
+    annual_v2g_total  = 0.0
+    annual_savings_vs_dumb = 0.0
+
+    for season, dwell_type, days_per_year, label in DAY_TYPES:
         print(f"\n{'='*65}")
-        print(f"  SEASON: {season.upper()}")
+        print(f"  {label}  ({days_per_year} days/year)")
         print(f"{'='*65}")
 
-        # ── Load prices ────────────────────────────────────────────────────
+        tru, plugged = build_load_and_availability(v2g, dwell=dwell_type)
         buy, v2g_p, price_source = load_prices(v2g, season=season)
-        print(f"\n  Price data: {price_source}")
-        print(f"  Buy:  EUR {buy.min():.3f} - {buy.max():.3f}/kWh")
-        print(f"  V2G peak: EUR {v2g_p.max():.3f}/kWh  |  "
-              f"Premium: EUR {(v2g_p - buy).max():.3f}/kWh")
-        print(f"  Plugged: {int(plugged.sum() * v2g.dt_h)}h/day ({dwell} dwell)")
 
-        # ── Scenario A: Dumb ───────────────────────────────────────────────
-        print(f"\n  [1/5] Scenario A - Dumb...")
+        print(f"  Prices: {price_source}")
+        print(f"  Buy: EUR {buy.min():.3f}-{buy.max():.3f}/kWh  |  "
+              f"V2G peak: EUR {v2g_p.max():.3f}/kWh  |  "
+              f"Plugged: {int(plugged.sum()*v2g.dt_h)}h/day")
+
         A = run_dumb(v2g, buy, v2g_p, tru, plugged, soc_init_pct, soc_final_pct)
-
-        # ── Scenario B: Smart, no V2G ──────────────────────────────────────
-        print(f"  [2/5] Scenario B - Smart charging only (V2G blocked)...")
         B = run_smart_no_v2g(v2g, buy, v2g_p, tru, plugged, soc_init_pct, soc_final_pct)
-
-        # ── Scenario C: Full Day-Ahead MILP ───────────────────────────────
-        print(f"  [3/5] Scenario C - Full Day-Ahead MILP (Smart + V2G)...")
         C = run_milp_day_ahead(v2g, buy, v2g_p, tru, plugged, soc_init_pct, soc_final_pct)
+        D = run_mpc_day_ahead(v2g, buy, v2g_p, tru, plugged, soc_init_pct, soc_final_pct,
+                              forecast_noise_std=0.0, label="D - MPC perfect")
+        E = run_mpc_day_ahead(v2g, buy, v2g_p, tru, plugged, soc_init_pct, soc_final_pct,
+                              forecast_noise_std=v2g.mpc_price_noise_std,
+                              label="E - MPC noisy", seed=42)
 
-        # ── Scenario D: MPC perfect ────────────────────────────────────────
-        print(f"  [4/5] Scenario D - MPC, full remaining day, perfect forecast...")
-        D = run_mpc_day_ahead(
-            v2g, buy, v2g_p, tru, plugged,
-            soc_init_pct, soc_final_pct,
-            forecast_noise_std=0.0,
-            label="D - MPC (day-ahead, perfect)",
-        )
-
-        # ── Scenario E: MPC noisy ──────────────────────────────────────────
-        print(f"  [5/5] Scenario E - MPC, full remaining day + noise...")
-        E = run_mpc_day_ahead(
-            v2g, buy, v2g_p, tru, plugged,
-            soc_init_pct, soc_final_pct,
-            forecast_noise_std=v2g.mpc_price_noise_std,
-            label="E - MPC (day-ahead + noise)",
-            seed=42,
-        )
-
-        results = {"A": A, "B": B, "C": C, "D": D, "E": E}
-        all_season_results[season] = results
-
-        # ── Degradation sensitivity ────────────────────────────────────────
-        print(f"\n  Degradation sensitivity sweep ({len(deg_values)} points)...")
-        deg_df   = deg_sensitivity(v2g, buy, v2g_p, tru, plugged,
-                                   deg_values, soc_init_pct, soc_final_pct)
+        results  = {"A": A, "B": B, "C": C, "D": D, "E": E}
+        deg_df   = deg_sensitivity(v2g, buy, v2g_p, tru, plugged, deg_values, soc_init_pct, soc_final_pct)
         fleet_df = fleet_scaling(C, D, fleet_sizes=[1, 5, 10, 25, 50])
 
-        print_report(results, fleet_df, deg_df, season=season,
-                     price_source=price_source)
+        print_report(results, fleet_df, deg_df, season=label, price_source=price_source)
 
-        out_chart = f"results_{season}.png"
-        print(f"  Generating chart → {out_chart} ...")
-        plot_all(hours, A, B, C, D, E, deg_df, fleet_df, season=season,
-                 out=out_chart)
+        out_png = f"results_{season}.png"
+        hours   = np.arange(v2g.n_slots) * v2g.dt_h
+        plot_all(hours, A, B, C, D, E, deg_df, fleet_df, season=label, out=out_png)
 
-    # ══════════════════════════════════════════════════════════════════════════
-    #  Winter vs Summer comparison summary
-    # ══════════════════════════════════════════════════════════════════════════
-    print("\n" + "="*65)
-    print("  WINTER vs SUMMER COMPARISON  (Scenario C – MILP Day-Ahead)")
-    print("="*65)
-    print(f"  {'Metric':<35} {'Winter':>10} {'Summer':>10}")
-    print("-"*65)
-    Cw = all_season_results["winter"]["C"]
-    Cs = all_season_results["summer"]["C"]
-    rows = [
-        ("Net cost (EUR/day)",        Cw.cost_eur_day,        Cs.cost_eur_day),
-        ("Charge cost (EUR/day)",      Cw.charge_cost_eur_day, Cs.charge_cost_eur_day),
-        ("V2G revenue (EUR/day)",      Cw.v2g_revenue_eur_day, Cs.v2g_revenue_eur_day),
-        ("V2G export (kWh/day)",       Cw.v2g_export_kwh_day,  Cs.v2g_export_kwh_day),
-        ("Annual V2G revenue (EUR/yr)",Cw.v2g_revenue_eur_day*365, Cs.v2g_revenue_eur_day*365),
-    ]
-    for label, vw, vs in rows:
-        print(f"  {label:<35} {vw:>10.2f} {vs:>10.2f}")
-    print("="*65)
-    print("\n  Done. Charts saved: results_winter.png  results_summer.png\n")
+        annual_cost_total        += C.cost_eur_day        * days_per_year
+        annual_v2g_total         += C.v2g_revenue_eur_day * days_per_year
+        annual_savings_vs_dumb   += (A.cost_eur_day - C.cost_eur_day) * days_per_year
+        all_season_results[season] = results
 
+    # ── Annual summary across all day types ────────────────────────────────
+    print(f"\n{'='*65}")
+    print(f"  ANNUAL SUMMARY — Single Trailer (Scenario C MILP)")
+    print(f"{'='*65}")
+    print(f"  Annual energy cost (MILP):        EUR {annual_cost_total:>8,.0f}/year")
+    print(f"  Annual V2G revenue (MILP):        EUR {annual_v2g_total:>8,.0f}/year")
+    print(f"  Annual savings vs Dumb charging:  EUR {annual_savings_vs_dumb:>8,.0f}/year")
+    print(f"  [Agora 2025 benchmark for car:    EUR ~500/year for arbitrage only]")
+    print()
 
 if __name__ == "__main__":
     main()
