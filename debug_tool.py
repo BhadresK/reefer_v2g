@@ -1,16 +1,4 @@
 #!/usr/bin/env python3
-"""
-debug_tool.py — V2G Debug Tool  (Option 2 + 4: Reference Tab + Formula Mode)
-S.KOe COOL | Schmitz Cargobull AG × TU Dortmund | Kuldip Bhadreshvara, 2026
-
-Run:  python debug_tool.py
-Deps: pip install numpy scipy pandas openpyxl
-
-Adapt run_optimisation.py:
-  load_prices(v2g, season, weekday=True/False)
-  build_load_and_availability(v2g, arrival_h=21.0, departure_h=7.0)
-  Both fall back gracefully if kwargs are missing.
-"""
 
 from __future__ import annotations
 import json, sys, traceback, threading, webbrowser, socket

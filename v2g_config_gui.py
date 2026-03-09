@@ -1,24 +1,4 @@
 #!/usr/bin/env python3
-"""
-v2g_config_gui.py
-═══════════════════════════════════════════════════════════════════════════════
-Interactive browser-based parameter editor for the S.KOe COOL V2G project.
-
-Usage:
-    python v2g_config_gui.py          # opens GUI, checks data, runs all sims
-    python v2g_config_gui.py --no-run # just open GUI to inspect/edit values
-
-How it works:
-    1. Starts a local HTTP server on a free port
-    2. Opens the config GUI in your default browser
-    3. You review and edit every parameter + choose what to run
-    4. Click "Confirm & Run" — values are sent back to Python
-    5. Python checks data prerequisites (auto-runs fetch_smard_data.py /
-       make_data.py if needed), then runs the chosen simulations
-
-Zero extra installs — uses Python built-ins only (http.server, webbrowser, json).
-═══════════════════════════════════════════════════════════════════════════════
-"""
 
 from __future__ import annotations
 import argparse
