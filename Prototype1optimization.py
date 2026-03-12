@@ -184,7 +184,7 @@ def generate_abbreviation_legend(out="abbreviation_legend.png"):
         ("TRU load",          "~2.8–4.0 kW (sinusoidal model)"),
         ("Arrival SoC",       "45% (winter average)"),
         ("Departure SoC",     "80% (cold-chain requirement)"),
-        ("deg cost default",  "0.07 €/kWh cycled (LFP cell ageing estimate)"),
+        ("deg cost default",  "0.02 €/kWh cycled (LFP cell ageing estimate)"),
     ]
     for term, desc in hardware:
         ax.text(0.03, y, f"  {term}:", ha="left", va="top", fontsize=8.5,
@@ -560,7 +560,7 @@ class V2GParams:
     discharge_power_kW:    float = 22.0     # max V2G discharge
     eta_charge:            float = 0.92
     eta_discharge:         float = 0.92
-    deg_cost_eur_kwh:      float = 0.07     # battery wear €/kWh cycled
+    deg_cost_eur_kwh:      float = 0.02     # battery wear €/kWh cycled
     dt_h:                  float = 0.25     # 15-min slots
     n_slots:               int   = 96       # 24 h x 4
     depot_connection_kVA:  float = 0.0      # Field 30 – 0 = no limit
